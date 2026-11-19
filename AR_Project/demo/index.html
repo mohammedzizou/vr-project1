@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <title>Living AR Assistant — Interactive Personality & Movement</title>
+    <!-- Google Model Viewer (Official WebXR, Apple ARKit Quick Look & Android Scene Viewer) -->
+    <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body {
+            background: radial-gradient(circle at 50% 30%, #0d1b3e 0%, #050b18 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            color: #ffffff;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 3D Model Viewer Canvas */
+        model-viewer {
+            flex: 1;
+            width: 100%;
+            height: 100%;
+            --poster-color: transparent;
+            outline: none;
+        }
+
+        /* Top HUD Bar */
+        header {
+            position: absolute;
+            top: 14px;
+            left: 14px;
+            right: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 30;
+            pointer-events: none;
+        }
+        .hud-badge {
+            background: rgba(10, 20, 50, 0.85);
+            border: 1px solid rgba(0, 212, 255, 0.45);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            padding: 8px 14px;
+            border-radius: 20px;
+            color: #00d4ff;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 20px rgba(0, 212, 255, 0.2);
+            pointer-events: auto;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #00e696;
+            box-shadow: 0 0 10px #00e696;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.85); }
+        }
+
+        /* Model Switcher */
+        .model-selector {
+            background: rgba(10, 20, 50, 0.9);
+            border: 1px solid rgba(0, 212, 255, 0.35);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border-radius: 24px;
+            display: flex;
+            padding: 4px;
+            gap: 4px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+            pointer-events: auto;
+        }
+        .selector-btn {
+            background: transparent;
+            border: none;
+            color: #bcd;
+            padding: 7px 15px;
+            border-radius: 18px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            white-space: nowrap;
+        }
+        .selector-btn.active {
+            background: linear-gradient(135deg, #00d4ff, #387aff);
+            color: #050b1e;
+            font-weight: 800;
+            box-shadow: 0 2px 14px rgba(0, 212, 255, 0.4);
+        }
+
+        /* Floating Interactive Speech Bubble */
+        #speech-bubble {
+            position: absolute;
+            top: 72px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(8, 18, 48, 0.92);
+            border: 1.5px solid #00d4ff;
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            padding: 10px 18px;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 212, 255, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 25;
+            max-width: 90%;
+            pointer-events: auto;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        #speech-bubble:active {
+            transform: translateX(-50%) scale(0.97);
+        }
+        .robot-avatar-icon {
+            font-size: 20px;
+            animation: bounce 1.8s infinite;
+        }
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-4px); }
+        }
+        #speech-text {
+            color: #ffffff;
+            font-size: 12.5px;
+            font-weight: 600;
+            line-height: 1.4;
+        }
+        #speech-text span {
+            color: #00d4ff;
+            font-weight: 700;
+        }
+
+        /* Bottom Controls Container */
+        .bottom-container {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            z-index: 30;
+            padding: 0 14px;
+            pointer-events: none;
+        }
+
+        /* Presentation Auto-Show Button */
+        .show-banner {
+            pointer-events: auto;
+            background: linear-gradient(135deg, rgba(0, 230, 150, 0.2), rgba(0, 212, 255, 0.25));
+            border: 1px solid #00e696;
+            color: #00e696;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 11.5px;
+            font-weight: 700;
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 15px rgba(0, 230, 150, 0.25);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .show-banner:active {
+            background: #00e696;
+            color: #050b1a;
+        }
+
+        /* Animation Action Chips */
+        #anim-bar {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            justify-content: center;
+            background: rgba(8, 16, 42, 0.88);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            padding: 7px 12px;
+            border-radius: 24px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.7);
+            pointer-events: auto;
+            max-width: 95%;
+        }
+        .anim-chip {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #ffffff;
+            padding: 6px 12px;
+            border-radius: 14px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .anim-chip:active, .anim-chip.active {
+            background: #00d4ff;
+            color: #050b1e;
+            border-color: #00d4ff;
+            box-shadow: 0 0 12px rgba(0, 212, 255, 0.5);
+            font-weight: 800;
+        }
+
+        /* Big Glowing AR Activation Button */
+        #ar-button {
+            background: linear-gradient(135deg, #00d4ff 0%, #387aff 100%);
+            border-radius: 35px;
+            border: none;
+            padding: 15px 32px;
+            font-size: 15px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            color: #050b1e;
+            box-shadow: 0 8px 30px rgba(0, 212, 255, 0.5);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            pointer-events: auto;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        #ar-button:active {
+            transform: scale(0.96);
+            box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3);
+        }
+
+        /* Hints */
+        .touch-hint {
+            font-size: 10.5px;
+            color: #89a;
+            letter-spacing: 0.5px;
+            text-align: center;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Top Navigation Header -->
+    <header>
+        <div class="hud-badge">
+            <div class="status-dot"></div>
+            <span>LIVING AR ASSISTANT</span>
+        </div>
+
+        <div class="model-selector">
+            <button class="selector-btn active" id="btn-robot" onclick="setModel('robot')">🤖 Cyber Bot</button>
+            <button class="selector-btn" id="btn-astro" onclick="setModel('astro')">🧑‍🚀 Astronaut</button>
+            <a href="vision_pro.html" class="selector-btn" style="text-decoration:none; color:#00d4ff; font-weight:700;">🥽 Vision Pro</a>
+        </div>
+    </header>
+
+    <!-- Interactive Speech Bubble -->
+    <div id="speech-bubble" onclick="speakCurrent()">
+        <span class="robot-avatar-icon">🤖</span>
+        <div id="speech-text">
+            <span>LedgerBot:</span> "Hi! Tap my actions below to see me move and dance!"
+        </div>
+    </div>
+
+    <!-- Google Model Viewer Component (Markerless True AR) -->
+    <model-viewer
+        id="viewer"
+        src="robot.glb"
+        ios-src="robot_anim.usdz"
+        ar
+        ar-modes="webxr scene-viewer quick-look"
+        ar-scale="auto"
+        camera-controls
+        touch-action="pan-y"
+        auto-rotate
+        auto-rotate-delay="2000"
+        rotation-per-second="25deg"
+        shadow-intensity="1.7"
+        shadow-softness="0.8"
+        environment-image="neutral"
+        exposure="1.2"
+        autoplay
+        animation-name="Dance"
+    >
+        <!-- AR Launch Button -->
+        <button slot="ar-button" id="ar-button" onclick="onLaunchAR()">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+                <path d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"/>
+                <circle cx="12" cy="12" r="3.2"/>
+            </svg>
+            VIEW IN YOUR ROOM (AR)
+        </button>
+    </model-viewer>
+
+    <!-- Bottom Controls & Action Chips -->
+    <div class="bottom-container">
+        <!-- 1-Click Presentation Auto-Show Button -->
+        <button class="show-banner" id="btn-show" onclick="startPresentationShow()">
+            ▶️ Run Classroom Presentation Show
+        </button>
+
+        <!-- Animation Chips for Robot -->
+        <div id="anim-bar">
+            <button class="anim-chip active" onclick="triggerMove('Dance', 'Dancing to the beat! AR makes learning interactive!')">💃 Dance</button>
+            <button class="anim-chip" onclick="triggerMove('Wave', 'Hello Professor and everyone! Welcome to Augmented Reality!')">👋 Wave</button>
+            <button class="anim-chip" onclick="triggerMove('Jump', 'Look at me jump! Gravity simulation active!')">🦘 Jump</button>
+            <button class="anim-chip" onclick="triggerMove('ThumbsUp', 'Good job! Augmented Reality is the future!')">👍 Thumbs Up</button>
+            <button class="anim-chip" onclick="triggerMove('Running', 'Sprinting in real-time 3D space!')">🏃 Run</button>
+            <button class="anim-chip" onclick="triggerMove('Punch', 'Superhero boxing mode activated!')">🥊 Punch</button>
+            <button class="anim-chip" onclick="triggerMove('Walking', 'Walking around your room!')">🚶 Walk</button>
+        </div>
+
+        <div class="touch-hint">
+            Tap the robot or speech bubble to hear it speak &bull; Pinch to zoom &bull; Drag to rotate
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // TEXT-TO-SPEECH (ROBOT VOICE)
+        // ==========================================
+        let speechActive = true;
+        let lastSpokenText = "Hi! Tap my actions below to see me move and dance!";
+
+        function speak(text) {
+            lastSpokenText = text;
+            if (!('speechSynthesis' in window)) return;
+            window.speechSynthesis.cancel(); // Stop any pending speech
+
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 1.05;
+            utterance.pitch = 1.25; // Slightly robotic higher pitch
+            utterance.lang = 'en-US';
+            window.speechSynthesis.speak(utterance);
+        }
+
+        function speakCurrent() {
+            speak(lastSpokenText);
+        }
+
+        // ==========================================
+        // UI SOUND SYNTHESIZER (Web Audio API)
+        // ==========================================
+        let audioCtx = null;
+        function playSfx(type) {
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                const now = audioCtx.currentTime;
+
+                if (type === 'jump') {
+                    osc.frequency.setValueAtTime(200, now);
+                    osc.frequency.exponentialRampToValueAtTime(800, now + 0.2);
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+                } else if (type === 'punch') {
+                    osc.frequency.setValueAtTime(150, now);
+                    osc.frequency.exponentialRampToValueAtTime(50, now + 0.15);
+                    gain.gain.setValueAtTime(0.4, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+                } else {
+                    osc.frequency.setValueAtTime(500, now);
+                    osc.frequency.exponentialRampToValueAtTime(900, now + 0.12);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+                }
+                osc.start(now);
+                osc.stop(now + 0.2);
+            } catch(e) {}
+        }
+
+        const viewer = document.getElementById('viewer');
+        const animBar = document.getElementById('anim-bar');
+        const speechBubble = document.getElementById('speech-bubble');
+        const speechText = document.getElementById('speech-text');
+
+        // ==========================================
+        // ANIMATION & PERSONALITY TRIGGER
+        // ==========================================
+        function triggerMove(animName, dialogText) {
+            playSfx(animName.toLowerCase());
+            viewer.animationName = animName;
+
+            // Update Speech Bubble
+            speechText.innerHTML = `<span>LedgerBot:</span> "${dialogText}"`;
+            speak(dialogText);
+
+            // Highlight chip button
+            document.querySelectorAll('.anim-chip').forEach(c => c.classList.remove('active'));
+            if (event && event.target && event.target.classList.contains('anim-chip')) {
+                event.target.classList.add('active');
+            }
+        }
+
+        // Tap directly on 3D Model to cycle fun reactions!
+        const funMoves = [
+            { anim: 'Wave', text: 'Hello! Thanks for tapping on me!' },
+            { anim: 'Jump', text: 'Boing! Check out my vertical jump!' },
+            { anim: 'Dance', text: 'Music time! Watch this rhythm!' },
+            { anim: 'ThumbsUp', text: 'You are awesome! AR is magic!' },
+            { anim: 'Punch', text: 'Hi-yah! Karate punch!' }
+        ];
+        let moveIndex = 0;
+
+        viewer.addEventListener('click', () => {
+            const m = funMoves[moveIndex % funMoves.length];
+            moveIndex++;
+            triggerMove(m.anim, m.text);
+        });
+
+        // ==========================================
+        // 1-CLICK CLASSROOM PRESENTATION SHOW
+        // ==========================================
+        let isShowRunning = false;
+        function startPresentationShow() {
+            if (isShowRunning) return;
+            isShowRunning = true;
+            const btn = document.getElementById('btn-show');
+            btn.innerText = '✨ Playing Presentation Show...';
+
+            // Step 1: Wave & Greet (0s)
+            triggerMove('Wave', 'Good morning Professor and classmates! Welcome to Augmented Reality!');
+
+            // Step 2: Jump (4s)
+            setTimeout(() => {
+                triggerMove('Jump', 'I am rendered in real time using 3D skeletal bones and computer vision!');
+            }, 4500);
+
+            // Step 3: Dance (8s)
+            setTimeout(() => {
+                triggerMove('Dance', 'Markerless SLAM anchors me directly to the physical floor!');
+            }, 9000);
+
+            // Step 4: Thumbs Up & Conclude (14s)
+            setTimeout(() => {
+                triggerMove('ThumbsUp', 'Thank you! Enjoy the rest of our presentation!');
+                btn.innerText = '▶️ Run Classroom Presentation Show';
+                isShowRunning = false;
+            }, 14500);
+        }
+
+        // ==========================================
+        // MODEL SWITCHER
+        // ==========================================
+        function setModel(type) {
+            playSfx('click');
+            document.querySelectorAll('.selector-btn').forEach(b => b.classList.remove('active'));
+
+            if (type === 'robot') {
+                viewer.src = 'robot.glb';
+                viewer.setAttribute('animation-name', 'Dance');
+                animBar.style.display = 'flex';
+                document.getElementById('btn-show').style.display = 'flex';
+                speechBubble.style.display = 'flex';
+                document.getElementById('btn-robot').classList.add('active');
+                triggerMove('Dance', 'Dancing to the beat! AR makes learning interactive!');
+            } else {
+                viewer.src = 'astronaut.glb';
+                viewer.removeAttribute('animation-name');
+                animBar.style.display = 'none';
+                document.getElementById('btn-show').style.display = 'none';
+                speechBubble.style.display = 'flex';
+                speechText.innerHTML = `<span>Apollo EVA:</span> "NASA Apollo Space Suit &bull; PBR Materials & Gold Visor"`;
+                document.getElementById('btn-astro').classList.add('active');
+                speak("NASA Apollo Space Suit. Notice the metallic gold visor reflection and realistic fabric folds.");
+            }
+        }
+
+        function onLaunchAR() {
+            playSfx('jump');
+            speak("Scanning your room. Point at the floor and tap to place me!");
+        }
+    </script>
+</body>
+</html>
